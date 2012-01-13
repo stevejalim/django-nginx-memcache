@@ -7,8 +7,14 @@ from distutils.util import convert_path
 from setuptools import setup, find_packages
 
 
-version = __import__('nginx_memcache').get_version()
-
+try:
+    version = __import__('nginx_memcache').get_version()
+except ImportError:
+    print "Cannot import nginx_memcache module - is it installed?"
+    sys.exit(1)
+except IndexError:
+    print "Cannot determine version of nginx_memcache module - is it installed?"
+    sys.exit(1)
 
 # Provided as an attribute, so you can append to these instead
 # of replicating them:
