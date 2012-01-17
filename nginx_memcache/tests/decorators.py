@@ -17,7 +17,7 @@ class CachePageDecoratorTests(TestCase):
         # Clear the cache before we do anything.
         request = self.factory.get('/')
         cache.clear()
-        cache_key = get_cache_key(request.get_full_path())
+        cache_key = get_cache_key(request.get_host(), request.get_full_path())
         assert not cache.get(cache_key)
 
         # Cache the view
