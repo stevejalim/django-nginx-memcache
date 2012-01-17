@@ -11,8 +11,7 @@ In progress
 
 IMPORTANT: If this has anything listed here, the code must be treated as unstable, even if it's on a master branch
 
-#. Add support for generating cache keys based on full URIs, not just the path; this means the project can be used on shared servers, or servers serving multiple sites/subdomains which may have the same URI path
-
+#. Nothing, at the mo
 
 To do
 -----
@@ -20,6 +19,13 @@ To do
 #. Add support for manually pushing a page via a function call
 #. Add support for manually pushing a page via a signal
 #. Add support for manually purging a page via a function call
+
+Things added that aren't currently in the original version
+-----
+
+See 
+
+#. Added support for generating cache keys based on full URIs, not just the path; this means the project can be used on shared servers, or servers serving multiple sites/subdomains which may have the same URI path
 
 
 Installation
@@ -50,10 +56,10 @@ Installation
 #. Install Nginx with the `set_misc <https://github.com/agentzh/set-misc-nginx-module>`_ or `set_hash module <https://github.com/simpl/ngx_http_set_hash>`_. This is required to compute md5 cache keys from within Nginx. (See installing nginx below).
 #. Configure Nginx for direct Memcached page retrieval, i.e::
 
-    # Nginx host configuration for demosite, using gunicorn
+    # Nginx host configuration for demosite. 
     #
     # Attempts to serve a page from memcache, falling
-    # back to Django (via gunicorn) if it's not available 
+    # back to Django if it's not available 
                              
     upstream gunicorn_demosite {
              server 127.0.0.1:8003 fail_timeout=0;
@@ -64,19 +70,24 @@ Installation
 
             # Listen for all server names - lots of sites will be CNAMED
             # to this server, and we won't know what/which.
-            # You could change this to a single server_name, of course
 
             server_name _;
 
             access_log /var/log/nginx/demosite.access.log;
             error_log /var/log/nginx/demosite.error.log;
 
+            # Uncomment the following if you want to check your 
+            # memcache keys during during development:
+            # log_format hashedgeneratedkey $hash_key;
+            # log_format realkey $memcached_key;
+            # access_log  /var/log/nginx/keys.log  hashedgeneratedkey;
+            # access_log  /var/log/nginx/keys.log  realkey;
+
             location /static/ {
                     root /usr/local/django/demosite/;
             }
 
             location /media/ {
-                    # This example happens to be running in a virtualenv - update your path accordingly
                     root /usr/local/django/virtualenvs/demosite/lib/python2.7/site-packages/django/contrib/admin/;
             }
 
@@ -119,7 +130,11 @@ Installation
 
                     set_md5 $hash_key $http_host$uri&pv=$page_version;
 
-                    set $memcached_key :1:$hash_key;
+                    # make sure this matches the cache prefix and version config in the Django project settings
+                    set $django_cache_prefix ps;
+                    set $django_cache_version 1;
+
+                    set $memcached_key $django_cache_prefix:$django_cache_version:$hash_key;
 
                     recursive_error_pages on;
 
@@ -127,15 +142,20 @@ Installation
 
                     default_type       text/html;
                     memcached_pass     127.0.0.1:11211;
-                    error_page         404 =200 @cache_miss; # cache misses get passed on as 200s (ideally)                                                          
-                    error_page         401 $fallthrough_uri;
-                    error_page         403 $fallthrough_uri;
-                    error_page         405 $fallthrough_uri;
+                    
+                    # We hand off all of these to @cache_miss and its descendent handlers.
+                    # The = means the handlers determine the error code, which is a Good Thing     
 
-                    try_files $fallthrough_uri @cache_miss;
+                    error_page         401 = @cache_miss;
+                    error_page         403 = @cache_miss;
+                    error_page         404 = @cache_miss;
+                    error_page         405 = @cache_miss;
+            
+                    # Note that it is not permitted to have a try_files in the same
+                    # location block as a memcache_pass
+
             }
     }
-
 Installing Nginx
 ~~~~~~~~~~~~~~~~
 
