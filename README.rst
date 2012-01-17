@@ -6,6 +6,22 @@ retrieve.
 The cache keys are hashed using an md5 of the the request path *without*
 GET parameters,
 
+In progress 
+-----------
+
+IMPORTANT: If this has anything listed here, the code must be treated as unstable, even if it's on a master branch
+
+#. Add support for generating cache keys based on full URIs, not just the path; this means the project can be used on shared servers, or servers serving multiple sites/subdomains which may have the same URI path
+
+
+To do
+-----
+
+#. Add support for manually pushing a page via a function call
+#. Add support for manually pushing a page via a signal
+#. Add support for manually purging a page via a function call
+
+
 Installation
 ------------
 
@@ -34,28 +50,97 @@ Installation
 #. Install Nginx with the `set_misc <https://github.com/agentzh/set-misc-nginx-module>`_ or `set_hash module <https://github.com/simpl/ngx_http_set_hash>`_. This is required to compute md5 cache keys from within Nginx. (See installing nginx below).
 #. Configure Nginx for direct Memcached page retrieval, i.e::
 
-    location / {
-        # Extract cache key args and cache key.
-        if ($http_cookie ~* "pv=([^;]+)(?:;|$)") {
-          set $page_version $1;
-        }
-        set_md5 $hash_key $uri&pv=$page_version;
-        set $memcached_key :1:$hash_key;
-
-        default_type       text/html;
-        memcached_pass     127.0.0.1:11211;
-        error_page         404 @cache_miss;
+    # Nginx host configuration for demosite, using gunicorn
+    #
+    # Attempts to serve a page from memcache, falling
+    # back to Django (via gunicorn) if it's not available 
+                             
+    upstream gunicorn_demosite {
+             server 127.0.0.1:8003 fail_timeout=0;
     }
 
-    location @cache_miss {
-        # Your previous django config goes here...
+    server {
+            listen 80 default_server;
+
+            # Listen for all server names - lots of sites will be CNAMED
+            # to this server, and we won't know what/which.
+            # You could change this to a single server_name, of course
+
+            server_name _;
+
+            access_log /var/log/nginx/demosite.access.log;
+            error_log /var/log/nginx/demosite.error.log;
+
+            location /static/ {
+                    root /usr/local/django/demosite/;
+            }
+
+            location /media/ {
+                    # This example happens to be running in a virtualenv - update your path accordingly
+                    root /usr/local/django/virtualenvs/demosite/lib/python2.7/site-packages/django/contrib/admin/;
+            }
+
+            location @gunicorn {
+                    # This is the standard config for serving Django via gunicorn                                                                                                                            
+                    root /usr/local/django/demosite/;
+
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header Host $http_host;
+                    proxy_redirect off;
+
+                    if (!-f $request_filename) {
+                        proxy_pass http://gunicorn_demosite;
+                        break;
+                    }
+
+                    client_max_body_size 10m;
+            }
+
+            location @cache_miss {
+                    # Pass on the request to gunicorn, creating
+                    # a URI with the hostname as well as the path                                                                                                  
+                    # See the docs if $is_args$args is confusing
+
+                    set $caught_uri $http_host$uri$is_args$args;
+                    try_files $caught_uri @gunicorn;
+            }
+
+            location / {
+                    # By default, see if we can serve things from memcache.
+
+                    # Extract cache key args and cache key.                                                                                                                                                 
+                    if ($http_cookie ~* "pv=([^;]+)(?:;|$)") {
+                            set $page_version $1;
+                    }
+
+                    # If you are running multiple sites off the same server, 
+                    # the cache key to include the domain, too, which nginx
+                    # doesn't consider part of the $uri. (SJ: it ought to do, but doesn't)
+
+                    set_md5 $hash_key $http_host$uri&pv=$page_version;
+
+                    set $memcached_key :1:$hash_key;
+
+                    recursive_error_pages on;
+
+                    set $fallthrough_uri null;
+
+                    default_type       text/html;
+                    memcached_pass     127.0.0.1:11211;
+                    error_page         404 =200 @cache_miss; # cache misses get passed on as 200s (ideally)                                                          
+                    error_page         401 $fallthrough_uri;
+                    error_page         403 $fallthrough_uri;
+                    error_page         405 $fallthrough_uri;
+
+                    try_files $fallthrough_uri @cache_miss;
+            }
     }
 
 Installing Nginx
 ~~~~~~~~~~~~~~~~
 
 These instructions apply for Ubuntu 11.04 and above::
-
+`
     # install all dependencies
     sudo aptitude install libc6 libpcre3 libpcre3-dev libpcrecpp0 libssl0.9.8 libssl-dev zlib1g zlib1g-dev lsb-base
 
