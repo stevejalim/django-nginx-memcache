@@ -110,7 +110,7 @@ Installation
 
                     # Extract cache key args and cache key.                                                                                                                                                 
                     if ($http_cookie ~* "pv=([^;]+)(?:;|$)") {
-                            set $page_version $1;
+                        set $page_version $1;
                     }
 
                     # If you are running multiple sites off the same server, 
@@ -140,7 +140,7 @@ Installing Nginx
 ~~~~~~~~~~~~~~~~
 
 These instructions apply for Ubuntu 11.04 and above::
-`
+
     # install all dependencies
     sudo aptitude install libc6 libpcre3 libpcre3-dev libpcrecpp0 libssl0.9.8 libssl-dev zlib1g zlib1g-dev lsb-base
 
