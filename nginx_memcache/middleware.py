@@ -17,18 +17,36 @@ class UpdateCacheMiddleware(object):
 
     The middleware must be at the top of settings.MIDDLEWARE_CLASSES
     to be called last during the response phase.
+
     """
 
-    def __init__(self, cache_timeout, page_version_fn, anonymous_only):
+    def __init__(
+            self,
+            cache_timeout,
+            page_version_fn,
+            anonymous_only,
+            lookup_identifier=None,
+            supplementary_identifier=None
+        ):
         """Initialize middleware. Args:
             * cache_timeout - seconds after which the cached response expires
             * page_version_fn - return a value to version the view based on
                     the request.
             * anonymous_only - only cache if the user is anonymous
+            * lookup_identifer - for populating the lookup table;
+                see models.CachedPageRecord. If not specified in the decorator,
+                the value of request.get_host() will be used, which is a good
+                thing to use anyway.
+            * supplementary_identifier - entirely optional scoping variable.
+                For populating the lookup table; see models.CachedPageRecord
+
         """
+
         self.cache_timeout = cache_timeout
         self.page_version_fn = page_version_fn
         self.anonymous_only = anonymous_only
+        self.lookup_identifier = lookup_identifier
+        self.supplementary_identifier = supplementary_identifier
 
     def process_response(self, request, response):
         """Sets the cache, if needed."""
@@ -37,9 +55,18 @@ class UpdateCacheMiddleware(object):
             # HTTPMiddleware, throws the body of a HEAD-request away before
             # this middleware gets a chance to cache it.
             return response
+
         # Logged in users don't cause caching if anonymous_only is set.
         if self.anonymous_only and request.user.is_authenticated():
             return response
-        cache_response(request, response, cache_timeout=self.cache_timeout,
-            page_version_fn=self.page_version_fn)
+
+        # Otherwise, we do want to cache the response.
+        cache_response(
+            request,
+            response,
+            cache_timeout=self.cache_timeout,
+            page_version_fn=self.page_version_fn,
+            lookup_identifier=self.lookup_identifier,
+            supplementary_identifier=self.supplementary_identifier
+        )
         return response

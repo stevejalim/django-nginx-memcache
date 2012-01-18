@@ -11,21 +11,14 @@ In progress
 
 IMPORTANT: If this has anything listed here, the code must be treated as unstable, even if it's on a master branch
 
-#. Nothing, at the mo
+#. Adding support for a database-backed lookup table of cached pages, to make mass-page invalidation easier
+#. Adding support for bulk invalidation of pages associated with a particular hostname (and/or subset of those pages. eg: if Cached Page A is hyperlinked from a menu that features on all pages in the site and its title changes, you need to invalidate more than just A, but - particularly if you're serving/cacheing multiple sites - you don't want to blat the entire nginx cache.)
 
 To do
 -----
 
-#. Add support for manually pushing a page via a function call
-#. Add support for manually pushing a page via a signal
-#. Add support for manually purging a page via a function call
-
-Things added that aren't currently in the original version
------
-
-See 
-
-#. Added support for generating cache keys based on full URIs, not just the path; this means the project can be used on shared servers, or servers serving multiple sites/subdomains which may have the same URI path
+#. Add support for manually pushing a page to the cache via a function call
+#. Add support for manually pushing a page to the cache via a signal
 
 
 Installation
@@ -43,17 +36,26 @@ Installation
         # ...
     )
 
-#. Then enable it and set the default cache timeout::
+#. If you wish to use the DB-backed cached-page lookup (so that you know what pages may have been cached, and so may need invalidating), run `syncdb` to add the required table:
+
+    ./manage.py syncdb nginx_memcache
+
+#. Set the default cache timeout::
 
     CACHE_NGINX = True
     CACHE_NGINX_TIME = 3600 * 24  # 1 day, in seconds
+    
     # Default backend to use from settings.CACHES
     # May need to update the nginx conf if this is changed
     CACHE_NGINX_ALIAS = 'default'
+    
+    # Whether or not a DB-backed lookup table is useds 
+    CACHE_NGINX_USE_LOOKUP_TABLE = True # default is True
 
 #. Setup Memcached appropriately as described in `Django's cache framework docs <http://docs.djangoproject.com/en/dev/topics/cache/#memcached>`_.
 
 #. Install Nginx with the `set_misc <https://github.com/agentzh/set-misc-nginx-module>`_ or `set_hash module <https://github.com/simpl/ngx_http_set_hash>`_. This is required to compute md5 cache keys from within Nginx. (See installing nginx below).
+
 #. Configure Nginx for direct Memcached page retrieval, i.e::
 
     # Nginx host configuration for demosite. 
@@ -62,100 +64,100 @@ Installation
     # back to Django if it's not available 
                              
     upstream gunicorn_demosite {
-             server 127.0.0.1:8003 fail_timeout=0;
+        server 127.0.0.1:8003 fail_timeout=0;
     }
 
     server {
-            listen 80 default_server;
+        listen 80 default_server;
 
-            # Listen for all server names - lots of sites will be CNAMED
-            # to this server, and we won't know what/which.
+        # Listen for all server names - lots of sites will be CNAMED
+        # to this server, and we won't know what/which.
 
-            server_name _;
+        server_name _;
 
-            access_log /var/log/nginx/demosite.access.log;
-            error_log /var/log/nginx/demosite.error.log;
+        access_log /var/log/nginx/demosite.access.log;
+        error_log /var/log/nginx/demosite.error.log;
 
-            # Uncomment the following if you want to check your 
-            # memcache keys during during development:
-            # log_format hashedgeneratedkey $hash_key;
-            # log_format realkey $memcached_key;
-            # access_log  /var/log/nginx/keys.log  hashedgeneratedkey;
-            # access_log  /var/log/nginx/keys.log  realkey;
+        # Uncomment the following if you want to check your 
+        # memcache keys during during development:
+        # log_format hashedgeneratedkey $hash_key;
+        # log_format realkey $memcached_key;
+        # access_log  /var/log/nginx/keys.log  hashedgeneratedkey;
+        # access_log  /var/log/nginx/keys.log  realkey;
 
-            location /static/ {
-                    root /usr/local/django/demosite/;
+        location /static/ {
+            root /usr/local/django/demosite/;
+        }
+
+        location /media/ {
+            root /usr/local/django/virtualenvs/demosite/lib/python2.7/site-packages/django/contrib/admin/;
+        }
+
+        location @gunicorn {
+            # This is the standard config for serving Django via gunicorn                                                                                                                            
+            root /usr/local/django/demosite/;
+
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header Host $http_host;
+            proxy_redirect off;
+
+            if (!-f $request_filename) {
+                proxy_pass http://gunicorn_demosite;
+                break;
             }
 
-            location /media/ {
-                    root /usr/local/django/virtualenvs/demosite/lib/python2.7/site-packages/django/contrib/admin/;
+            client_max_body_size 10m;
+        }
+
+        location @cache_miss {
+            # Pass on the request to gunicorn, creating
+            # a URI with the hostname as well as the path                                                                                                  
+            # See the docs if $is_args$args is confusing
+
+            set $caught_uri $http_host$uri$is_args$args;
+            try_files $caught_uri @gunicorn;
+        }
+
+        location / {
+            # By default, see if we can serve things from memcache.
+
+            # Extract cache key args and cache key.                                                                                                                                                 
+            if ($http_cookie ~* "pv=([^;]+)(?:;|$)") {
+                set $page_version $1;
             }
 
-            location @gunicorn {
-                    # This is the standard config for serving Django via gunicorn                                                                                                                            
-                    root /usr/local/django/demosite/;
+            # If you are running multiple sites off the same server, 
+            # the cache key to include the domain, too, which nginx
+            # doesn't consider part of the $uri. (SJ: it ought to do, but doesn't)
 
-                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                    proxy_set_header Host $http_host;
-                    proxy_redirect off;
+            set_md5 $hash_key $http_host$uri&pv=$page_version;
 
-                    if (!-f $request_filename) {
-                        proxy_pass http://gunicorn_demosite;
-                        break;
-                    }
+            # make sure this matches the cache prefix and version config in the Django project settings
+            set $django_cache_prefix ps;
+            set $django_cache_version 1;
 
-                    client_max_body_size 10m;
-            }
+            set $memcached_key $django_cache_prefix:$django_cache_version:$hash_key;
 
-            location @cache_miss {
-                    # Pass on the request to gunicorn, creating
-                    # a URI with the hostname as well as the path                                                                                                  
-                    # See the docs if $is_args$args is confusing
+            recursive_error_pages on;
 
-                    set $caught_uri $http_host$uri$is_args$args;
-                    try_files $caught_uri @gunicorn;
-            }
+            set $fallthrough_uri null;
 
-            location / {
-                    # By default, see if we can serve things from memcache.
-
-                    # Extract cache key args and cache key.                                                                                                                                                 
-                    if ($http_cookie ~* "pv=([^;]+)(?:;|$)") {
-                        set $page_version $1;
-                    }
-
-                    # If you are running multiple sites off the same server, 
-                    # the cache key to include the domain, too, which nginx
-                    # doesn't consider part of the $uri. (SJ: it ought to do, but doesn't)
-
-                    set_md5 $hash_key $http_host$uri&pv=$page_version;
-
-                    # make sure this matches the cache prefix and version config in the Django project settings
-                    set $django_cache_prefix ps;
-                    set $django_cache_version 1;
-
-                    set $memcached_key $django_cache_prefix:$django_cache_version:$hash_key;
-
-                    recursive_error_pages on;
-
-                    set $fallthrough_uri null;
-
-                    default_type       text/html;
-                    memcached_pass     127.0.0.1:11211;
-                    
-                    # We hand off all of these to @cache_miss and its descendent handlers.
-                    # The = means the handlers determine the error code, which is a Good Thing     
-
-                    error_page         401 = @cache_miss;
-                    error_page         403 = @cache_miss;
-                    error_page         404 = @cache_miss;
-                    error_page         405 = @cache_miss;
+            default_type       text/html;
+            memcached_pass     127.0.0.1:11211;
             
-                    # Note that it is not permitted to have a try_files in the same
-                    # location block as a memcache_pass
+            # We hand off all of these to @cache_miss and its descendent handlers.
+            # The = means the handlers determine the error code, which is a Good Thing     
 
-            }
+            error_page         401 = @cache_miss;
+            error_page         403 = @cache_miss;
+            error_page         404 = @cache_miss;
+            error_page         405 = @cache_miss;
+    
+            # Note that it is not permitted to have a try_files in the same
+            # location block as a memcache_pass
+        }
     }
+
 Installing Nginx
 ~~~~~~~~~~~~~~~~
 

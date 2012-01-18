@@ -1,5 +1,5 @@
 Authors
 =======
 
-* Paul Craciunoiu (original project creator)
-* Steve Jalim (steve.jalim@torchbox.com, @stevejalim)
+* Paul Craciunoiu (paul@craciunoiu.net, @embrangler)
+* Steve Jalim (steve@torchbox.com, @stevejalim)
