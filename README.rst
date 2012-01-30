@@ -21,9 +21,9 @@ To do
 Installation
 ------------
 
-#. The usual pip or easy_install from `github <https://github.com/pcraciunoiu/django-nginx-memcache>`_::
+#. The usual pip or easy_install from `github <https://github.com/torchbox/django-nginx-memcache>`_::
 
-    pip install -e git://github.com/pcraciunoiu/django-nginx-memcache#egg=django-nginx-memcache
+    pip install -e git://github.com/torchbox/django-nginx-memcache#egg=django-nginx-memcache
 
 #. Add ``nginx_memcache`` to your installed apps::
 
