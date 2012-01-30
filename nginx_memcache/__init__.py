@@ -1,6 +1,5 @@
 VERSION = (0, 2, 'unofficial-alpha')
 
-
 def get_version():
     version = '%s.%s' % (VERSION[0], VERSION[1])
     try:
@@ -9,3 +8,8 @@ def get_version():
         pass
 
     return version
+
+from .signals import (
+    handle_single_page_invalidation,
+    handle_multiple_page_invalidation
+)

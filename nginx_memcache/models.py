@@ -69,7 +69,7 @@ class CachedPageRecord(models.Model):
     def memcached_key(self):
         """
         Complete representation of the cache key used by memcache.
-        Includes the appropriate Djagno prefix and version.
+        Includes the appropriate Django prefix and version.
 
         """
 

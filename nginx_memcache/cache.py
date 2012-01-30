@@ -11,7 +11,6 @@ CACHE_TIME = getattr(settings, 'CACHE_NGINX_TIME', 3600 * 24)
 CACHE_ALIAS = getattr(settings, 'CACHE_NGINX_ALIAS', 'default')
 nginx_cache = get_cache(CACHE_ALIAS)
 
-
 def cache_response(
         request,
         response,

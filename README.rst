@@ -11,9 +11,6 @@ In progress
 
 IMPORTANT: If this has anything listed here, the code must be treated as unstable, even if it's on a master branch
 
-#. Adding support for a database-backed lookup table of cached pages, to make mass-page invalidation easier
-#. Adding support for bulk invalidation of pages associated with a particular hostname (and/or subset of those pages. eg: if Cached Page A is hyperlinked from a menu that features on all pages in the site and its title changes, you need to invalidate more than just A, but - particularly if you're serving/cacheing multiple sites - you don't want to blat the entire nginx cache.)
-
 To do
 -----
 

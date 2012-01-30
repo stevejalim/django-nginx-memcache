@@ -6,7 +6,7 @@ from django.conf import settings
 from nginx_memcache.decorators import cache_page_nginx
 from nginx_memcache.models import CachedPageRecord
 from nginx_memcache.cache import (
-    nginx_cache as cache, 
+    nginx_cache as cache,
     CACHE_ALIAS,
     get_cache_key,
     invalidate_from_request,
@@ -48,7 +48,7 @@ class CachedPageRecordTests(TestCase):
 
     def test_lookup_record_not_created_if_disabled_in_settings(self):
 
-        #monkey-patch settings for test purposes
+        # Monkey-patch settings for test purposes
         setattr(settings, 'CACHE_NGINX_USE_LOOKUP_TABLE', False)
 
         factory = RequestFactory()
