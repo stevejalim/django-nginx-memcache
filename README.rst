@@ -3,6 +3,8 @@ Django Nginx Memcache
 Provides a view decorator. Use it to cache content in Memcache for nginx to
 retrieve.
 
+Provides functions and signals to use to invalidate the cache, too.
+
 The cache keys are hashed using an md5 of the the request path *without*
 GET parameters,
 
