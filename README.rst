@@ -15,8 +15,6 @@ To do
 -----
 
 #. Add support for manually pushing a page to the cache via a function call
-#. Add support for manually pushing a page to the cache via a signal
-
 
 Installation
 ------------
