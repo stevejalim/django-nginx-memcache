@@ -32,7 +32,7 @@ class CachedPageRecord(models.Model):
         max_length=255,
         db_index=True,
         help_text=(
-            "An identifier for whatever your parent object is." +
+            "A 255-char identifier for whatever your parent object is." +
             "Could be a slug, a subdomain, or a Site ID [as a string]. " +
             "If no lookup_identifier is passed to the cache decorator, " +
             "this value will be the hostname of the server (which is fine)."
@@ -42,10 +42,10 @@ class CachedPageRecord(models.Model):
     supplementary_identifier = models.CharField(
         blank=True,
         null=True,
-        max_length=255,
+        max_length=45,  # kept short to avoid breaking MySQL's 1000-byte index limit
         help_text=(
             "Additional meta string you can use to scope your invalidation " +
-            "calls to a subset of keys - eg 'news' or 'category_3'"
+            "calls to a subset of keys - eg 'news' or 'category_3'. 45 chars max."
         )
     )
 

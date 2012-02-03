@@ -19,7 +19,6 @@ from nginx_memcache.signals import (
     invalidate_many_pages
 )
 
-
 class CacheSignalTests(TestCase):
 
     def setUp(self):

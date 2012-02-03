@@ -16,7 +16,7 @@ IMPORTANT: If this has anything listed here, the code must be treated as unstabl
 To do
 -----
 
-#. Add support for manually pushing a page to the cache via a function call
+#. Add support for manually pushing a page to the cache via a function call - this will enable eager cacheing
 
 Installation
 ------------
