@@ -37,6 +37,13 @@ Installation
 
     ./manage.py syncdb nginx_memcache
 
+#. Let your app/project know about the cache-invalidation signals by importing them in a module you *know* will always be loaded (eg the `__init__.py` for your core app)
+
+    from nginx_memcache.signals import (
+        handle_single_page_invalidation,
+        handle_multiple_page_invalidation
+    )
+
 #. Set the default cache timeout::
 
     CACHE_NGINX = True

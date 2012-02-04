@@ -1,15 +1,25 @@
-VERSION = (0, 2, 'unofficial-alpha')
+VERSION = (0, 2, 1, 'unofficial-alpha')
 
 def get_version():
-    version = '%s.%s' % (VERSION[0], VERSION[1])
+    version = '%s.%s.%s' % (
+        VERSION[0],
+        VERSION[1],
+        VERSION[2]
+    )
     try:
-        version = '%s.%s.%s' % (version, VERSION[1], VERSION[2])
+        version = '%s.%s.%s %s' % (
+            VERSION[0],
+            VERSION[1],
+            VERSION[2],
+            VERSION[3]
+        )
     except IndexError:
         pass
-
     return version
 
-from .signals import (
-    handle_single_page_invalidation,
-    handle_multiple_page_invalidation
-)
+# Ensure you have the following import in your main Django app
+
+# from nginx_memcache.signals import (
+#     handle_single_page_invalidation,
+#     handle_multiple_page_invalidation
+# )
