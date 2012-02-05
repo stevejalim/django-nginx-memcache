@@ -4,12 +4,15 @@ from django.conf import settings
 from django.core.cache import get_cache
 from django.db import IntegrityError
 from django.template.response import TemplateResponse
+from django.utils.encoding import DjangoUnicodeDecodeError
+from django.utils.html import strip_spaces_between_tags as minify_html
 
 from .models import CachedPageRecord
 
 CACHE_NGINX_DEFAULT_COOKIE = getattr(settings, 'CACHE_NGINX_COOKIE', 'pv')
 CACHE_TIME = getattr(settings, 'CACHE_NGINX_TIME', 3600 * 24)
 CACHE_ALIAS = getattr(settings, 'CACHE_NGINX_ALIAS', 'default')
+CACHE_MINIFY_HTML = getattr(settings, 'CACHE_MINIFY_HTML', False)
 nginx_cache = get_cache(CACHE_ALIAS)
 
 def cache_response(
@@ -26,6 +29,14 @@ def cache_response(
     render automatically, you we must trigger this."""
     if type(response) is TemplateResponse and not response.is_rendered:
         response.render()
+
+    """ Minify the HTML outout if set in settings. """
+    if CACHE_MINIFY_HTML:
+        if 'text/html' in response['Content-Type']:
+            try:
+                response.content = minify_html(response.content.strip())
+            except DjangoUnicodeDecodeError:
+                pass
 
     """Cache this response for the web server to grab next time."""
     # get page version

@@ -293,6 +293,9 @@ Full List of Settings
 ``CACHE_NGINX_ALIAS``
   Which cache backend to use from `settings.CACHES <https://docs.djangoproject.com/en/dev/ref/settings/#std:setting-CACHES>`_
 
+``CACHE_MINIFY_HTML``
+  Will cache a HTML minified version of the response output. Default = False.
+
 Contributing
 ============
 If you'd like to fix a bug, add a feature, etc
