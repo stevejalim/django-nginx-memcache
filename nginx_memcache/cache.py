@@ -3,6 +3,7 @@ import hashlib
 from django.conf import settings
 from django.core.cache import get_cache
 from django.db import IntegrityError
+from django.template.response import TemplateResponse
 
 from .models import CachedPageRecord
 
@@ -20,6 +21,12 @@ def cache_response(
         lookup_identifier=None,
         supplementary_identifier=None
     ):
+
+    """Class based view responses TemplateResponse objects and do not call
+    render automatically, you we must trigger this."""
+    if type(response) is TemplateResponse and not response.is_rendered:
+        response.render()
+
     """Cache this response for the web server to grab next time."""
     # get page version
     if page_version_fn:
