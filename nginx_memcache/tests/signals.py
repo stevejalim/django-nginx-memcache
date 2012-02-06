@@ -1,5 +1,5 @@
 """Feature-level tests to confirm that
-the signal handlers are work
+the signal handlers are working as expected
 """
 
 from django.http import HttpResponse
