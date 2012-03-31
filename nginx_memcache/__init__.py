@@ -1,4 +1,5 @@
-VERSION = (0, 2, 1, 'unofficial-alpha')
+VERSION = (0, 2, 2, 'unofficial-alpha')
+
 
 def get_version():
     version = '%s.%s.%s' % (
