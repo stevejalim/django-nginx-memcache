@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 
 from .cache import cache_response
@@ -70,20 +72,26 @@ class UpdateCacheMiddleware(object):
         if self.anonymous_only and request.user.is_authenticated():
             return response
 
+        logging.info("do_cache_https: %s" % do_cache_https)
         if not do_cache_https:
             # If cacheing of pages accessed over https, skip cacheing
             if request.is_secure():
-                print "request.is_secure()"
+                logging.info("request.is_secure() == True")
                 return response
-
             # As of Django 1.4, request.is_secure() checks for things like
             # X-Forwarded-Proto and X-Forwarded-SSL, but this caters for
             # pre-1.4 projects:
+            logging.info("https_headers_to_check: %s" % https_headers_to_check)
             for header, significant_value in https_headers_to_check:
                 # convert header to Django's request.META format
                 _header = 'HTTP_' + header.upper().replace('-', '_')
-                if request.META.get(_header, None) == significant_value:
-                    print "request.META.get(_header, None) == significant_value", request.META.get(_header, None), significant_value
+                logging.info('_header: %s' % _header)
+                if request.META.get(_header, None).lower() == significant_value.lower():
+                    logging.info("%s %s %s " % (
+                        _header,
+                        request.META.get(_header, None).lower(),
+                        significant_value.lower())
+                    )
                     return response
 
         # Otherwise, we do want to cache the response.
