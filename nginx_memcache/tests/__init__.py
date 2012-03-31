@@ -1,3 +1,3 @@
-from .decorators import CachePageDecoratorTests
+from .decorators import CachePageDecoratorTests, CachePageDecoratorHTTPSTests, CachePageDecoratorHTTPSSkipCacheTests
 from .cache import CachedPageRecordTests
 from .signals import CacheSignalTests

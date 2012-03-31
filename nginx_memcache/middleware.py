@@ -4,19 +4,6 @@ from django.conf import settings
 
 from .cache import cache_response
 
-is_enabled = getattr(settings, 'CACHE_NGINX', True)
-
-do_cache_https = getattr(settings, 'CACHE_NGINX_INCLUDE_HTTPS', True)
-
-https_headers_to_check = getattr(
-    settings,
-    'CACHE_NGINX_ALTERNATIVE_SSL_HEADERS',
-    (
-        ('X-Forwarded-Proto', 'HTTPS'),
-        ('X-Forwarded-SSL', 'on')
-    )
-)
-
 
 class UpdateCacheMiddleware(object):
     """Updates the cache cache with the response of the request.
@@ -62,6 +49,22 @@ class UpdateCacheMiddleware(object):
 
     def process_response(self, request, response):
         """Sets the cache, if needed."""
+
+        # These live at method level not class level so that
+        # tests can change them accordingly
+        is_enabled = getattr(settings, 'CACHE_NGINX', True)
+
+        do_cache_https = getattr(settings, 'CACHE_NGINX_INCLUDE_HTTPS', True)
+
+        https_headers_to_check = getattr(
+            settings,
+            'CACHE_NGINX_ALTERNATIVE_SSL_HEADERS',
+            (
+                ('X-Forwarded-Proto', 'HTTPS'),
+                ('X-Forwarded-SSL', 'on')
+            )
+        )
+
         if not is_enabled or request.method != 'GET' or (
             response.status_code != 200):
             # HTTPMiddleware, throws the body of a HEAD-request away before
@@ -78,20 +81,26 @@ class UpdateCacheMiddleware(object):
             if request.is_secure():
                 logging.info("request.is_secure() == True")
                 return response
+            else:
+                logging.info("request.is_secure() == False")
+
             # As of Django 1.4, request.is_secure() checks for things like
-            # X-Forwarded-Proto and X-Forwarded-SSL, but this caters for
+            # X-Forwarded-Proto and X-Forwarded-Proto-Forwarded-SSL, but this caters for
             # pre-1.4 projects:
-            logging.info("https_headers_to_check: %s" % https_headers_to_check)
+
             for header, significant_value in https_headers_to_check:
                 # convert header to Django's request.META format
                 _header = 'HTTP_' + header.upper().replace('-', '_')
                 logging.info('_header: %s' % _header)
-                if request.META.get(_header, None).lower() == significant_value.lower():
-                    logging.info("%s %s %s " % (
-                        _header,
-                        request.META.get(_header, None).lower(),
-                        significant_value.lower())
-                    )
+                logging.info('request.GET %s' % request.GET)
+                logging.info('request.META %s' % request.META)
+                logging.info("Trying header: %s request val:%s significant_value: %s " % (
+                    _header,
+                    request.META.get(_header, "").lower(),
+                    significant_value.lower())
+                )
+                if request.META.get(_header, "").lower() == significant_value.lower():
+                    logging.info("Not cacheing because found appropriate post-HTTPS header")
                     return response
 
         # Otherwise, we do want to cache the response.
@@ -103,4 +112,6 @@ class UpdateCacheMiddleware(object):
             lookup_identifier=self.lookup_identifier,
             supplementary_identifier=self.supplementary_identifier
         )
+        logging.info("Response cached")
+
         return response

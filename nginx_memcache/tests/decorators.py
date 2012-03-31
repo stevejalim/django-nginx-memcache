@@ -1,3 +1,4 @@
+import logging
 from django.http import HttpResponse
 from django.test import TestCase
 from django.test.client import RequestFactory
@@ -31,8 +32,10 @@ class CachePageDecoratorTests(TestCase):
 class CachePageDecoratorHTTPSTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
+        settings.CACHE_NGINX_INCLUDE_HTTPS = True
 
     def test_ssl_requests_can_be_cached(self):
+
         def my_view(request):
             return HttpResponse('content')
 
@@ -46,13 +49,16 @@ class CachePageDecoratorHTTPSTests(TestCase):
         cache_key = get_cache_key(request.get_host(), request.get_full_path())
         assert not cache.get(cache_key)
         # Cache the view
+        logging.info("settings.CACHE_NGINX_INCLUDE_HTTPS should be True, Got: %s" % settings.CACHE_NGINX_INCLUDE_HTTPS)
+        logging.info("Trying to cache a view - should be cached")
+        logging.info(getattr(settings, 'CACHE_NGINX_INCLUDE_HTTPS', True))
         my_view_cached = cache_page_nginx(my_view)
         self.assertEqual(my_view_cached(request).content, 'content')
         assert cache.get(cache_key)
 
         # Show that HTTPS header requests are cached by default
         kwargs = {}
-        kwargs["X-Forwarded-Proto"] = "HTTPS"
+        kwargs["HTTP_X_FORWARDED_PROTO"] = "HTTPS"
         # Clear the cache before we do anything.
         request = self.factory.get('/', **kwargs)
         cache.clear()
@@ -64,7 +70,7 @@ class CachePageDecoratorHTTPSTests(TestCase):
         assert cache.get(cache_key)
 
         kwargs = {}
-        kwargs["X-Forwarded-SSL"] = "on"
+        kwargs["HTTP_X_FORWARDED_SSL"] = "on"
 
         # Clear the cache before we do anything.
         request = self.factory.get('/', **kwargs)
@@ -81,9 +87,11 @@ class CachePageDecoratorHTTPSSkipCacheTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
         ## monkey-patch settings to disable HTTPS cacheing
-        setattr(settings, 'CACHE_NGINX_INCLUDE_HTTPS', False)
+        settings.CACHE_NGINX_INCLUDE_HTTPS = False
 
     def test_ssl_requests_can_be_not_cached(self):
+        logging.info("settings.CACHE_NGINX_INCLUDE_HTTPS should be False, Got: %s" % settings.CACHE_NGINX_INCLUDE_HTTPS)
+
         def my_view(request):
             return HttpResponse('content')
 
@@ -103,7 +111,7 @@ class CachePageDecoratorHTTPSSkipCacheTests(TestCase):
 
         # Show that HTTPS header requests can not be cached cached by default
         kwargs = {}
-        kwargs["X-Forwarded-Proto"] = "HTTPS"
+        kwargs["HTTP_X_FORWARDED_PROTO"] = "HTTPS"
         # Clear the cache before we do anything.
         request = self.factory.get('/', **kwargs)
         cache.clear()
@@ -112,10 +120,11 @@ class CachePageDecoratorHTTPSSkipCacheTests(TestCase):
         # Cache the view
         my_view_cached = cache_page_nginx(my_view)
         self.assertEqual(my_view_cached(request).content, 'content')
+        logging.info("Trying to skip cacheing a view - should NOT be cached")
         assert not cache.get(cache_key)
 
         kwargs = {}
-        kwargs["X-Forwarded-SSL"] = "on"
+        kwargs["HTTP_X_FORWARDED_SSL"] = "on"
 
         # Clear the cache before we do anything.
         request = self.factory.get('/', **kwargs)
