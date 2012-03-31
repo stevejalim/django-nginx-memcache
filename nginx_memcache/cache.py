@@ -15,6 +15,7 @@ CACHE_ALIAS = getattr(settings, 'CACHE_NGINX_ALIAS', 'default')
 CACHE_MINIFY_HTML = getattr(settings, 'CACHE_MINIFY_HTML', False)
 nginx_cache = get_cache(CACHE_ALIAS)
 
+
 def cache_response(
         request,
         response,

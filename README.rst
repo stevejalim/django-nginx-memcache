@@ -54,8 +54,17 @@ Installation
     CACHE_NGINX_ALIAS = 'default'
     
     # Whether or not a DB-backed lookup table is useds 
-    CACHE_NGINX_USE_LOOKUP_TABLE = True # default is True
+    CACHE_NGINX_USE_LOOKUP_TABLE = True  # default is True
 
+    # Whether or not to cache HTTPS requests, and how to identify HTTPS requests from headers
+    # (eg, if SSL termination has taken place before Django is hit)
+    CACHE_NGINX_INCLUDE_HTTPS = True  # default is True
+    CACHE_NGINX_ALTERNATIVE_SSL_HEADERS' = (
+        ('X-Forwarded-Proto', 'HTTPS'),
+        ('X-Forwarded-SSL', 'on')
+    )  # values in tuples are header, value that confirms was a HTTPS request
+    # the examples above are the defaults. See middleware.py
+    
 #. Setup Memcached appropriately as described in `Django's cache framework docs <http://docs.djangoproject.com/en/dev/topics/cache/#memcached>`_.
 
 #. Install Nginx with the `set_misc <https://github.com/agentzh/set-misc-nginx-module>`_ or `set_hash module <https://github.com/simpl/ngx_http_set_hash>`_. This is required to compute md5 cache keys from within Nginx. (See installing nginx below).
@@ -65,7 +74,9 @@ Installation
     # Nginx host configuration for demosite. 
     #
     # Attempts to serve a page from memcache, falling
-    # back to Django if it's not available 
+    # back to Django if it's not available. 
+    # This example version also skips trying to get pages 
+    # from memcache if the page was accessed over SSL.
                              
     upstream gunicorn_demosite {
         server 127.0.0.1:8003 fail_timeout=0;
@@ -73,94 +84,130 @@ Installation
 
     server {
         listen 80 default_server;
-
+        
         # Listen for all server names - lots of sites will be CNAMED
         # to this server, and we won't know what/which.
+
+        # We listen on 80 because, behind ELB, everything is non-SSL
+        # and anything that was SSL has the X-Forwarded-Proto: HTTPS
+        # header appended to the request, which we'll look for.
 
         server_name _;
 
         access_log /var/log/nginx/demosite.access.log;
         error_log /var/log/nginx/demosite.error.log;
 
-        # Uncomment the following if you want to check your 
-        # memcache keys during during development:
-        # log_format hashedgeneratedkey $hash_key;
-        # log_format realkey $memcached_key;
-        # access_log  /var/log/nginx/keys.log  hashedgeneratedkey;
-        # access_log  /var/log/nginx/keys.log  realkey;
+        # temporary logging during development
+        log_format hashedgeneratedkey $hash_key;
+        log_format realkey $memcached_key;
+        access_log  /var/log/nginx/keys.log  hashedgeneratedkey;
+        access_log  /var/log/nginx/keys.log  realkey;
+        # are we getting the HTTPS header?
+        log_format http_x_forwarded_proto $http_x_forwarded_proto;
+        access_log  /var/log/nginx/keys.log  http_x_forwarded_proto;
 
         location /static/ {
-            root /usr/local/django/demosite/;
+                root /usr/local/django/demosite/;
         }
 
         location /media/ {
-            root /usr/local/django/virtualenvs/demosite/lib/python2.7/site-packages/django/contrib/admin/;
+                root /usr/local/django/virtualenvs/demosite/lib/python2.7/site-packages/django/contrib/admin/;
         }
 
         location @gunicorn {
-            # This is the standard config for serving Django via gunicorn                                                                                                                            
-            root /usr/local/django/demosite/;
+                # This is the standard config for serving Django via gunicorn                                                                                                                            
+                root /usr/local/django/demosite/;
 
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header Host $http_host;
-            proxy_redirect off;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header Host $http_host;
+                proxy_redirect off;
 
-            if (!-f $request_filename) {
-                proxy_pass http://gunicorn_demosite;
-                break;
-            }
+                if (!-f $request_filename) {
+                    proxy_pass http://gunicorn_demosite;
+                    break;
+                }
 
-            client_max_body_size 10m;
+                client_max_body_size 10m;
         }
 
         location @cache_miss {
-            # Pass on the request to gunicorn, creating
-            # a URI with the hostname as well as the path                                                                                                  
-            # See the docs if $is_args$args is confusing
+                # Pass on the request to gunicorn, creating
+                # a URI with the hostname as well as the path                                                                                                  
+                # See the docs if $is_args$args is confusing
 
-            set $caught_uri $http_host$uri$is_args$args;
-            try_files $caught_uri @gunicorn;
+                set $caught_uri $http_host$uri$is_args$args;
+                try_files $caught_uri @gunicorn;
+        }
+
+        location @memcache_check {
+
+                # Otherwise, see if we can serve things from memcache.
+
+                # Extract cache key args and cache key. 
+                if ($http_cookie ~* "pv=([^;]+)(?:;|$)") {
+                    set $page_version $1;
+                }
+
+                # If you are running multiple sites off the same server, 
+                # the cache key to include the domain, too, which nginx
+                # doesn't consider part of the $uri. (SJ: it ought to do, but doesn't)
+
+                set_md5 $hash_key $http_host$uri&pv=$page_version;
+                # make sure that this matches the CACHE_PREFIX in project settings
+                set $django_cache_prefix ps;
+                set $django_cache_version 1;
+                set $memcached_key $django_cache_prefix:$django_cache_version:$hash_key;
+
+                recursive_error_pages on;
+
+                set $fallthrough_uri null;
+                  
+                # Hit memcache, to see if the page is there 
+
+                default_type       text/html;
+                memcached_pass     127.0.0.1:11211;
+
+                # We hand off all of these to @cache_miss and its descendent handlers.
+                # The = means the handlers determine the error code, which is a Good Thing     
+
+                error_page         401 = @cache_miss;
+                error_page         403 = @cache_miss;
+                error_page         404 = @cache_miss;
+                error_page         405 = @cache_miss;
+
+                # Note that it is not permitted to have a try_files in the same
+                # location block as a memcache_pass
         }
 
         location / {
-            # By default, see if we can serve things from memcache.
 
-            # Extract cache key args and cache key.                                                                                                                                                 
-            if ($http_cookie ~* "pv=([^;]+)(?:;|$)") {
-                set $page_version $1;
-            }
+                recursive_error_pages on;
+        
+                set $caught_uri $http_host$uri$is_args$args;
 
-            # If you are running multiple sites off the same server, 
-            # the cache key to include the domain, too, which nginx
-            # doesn't consider part of the $uri. (SJ: it ought to do, but doesn't)
+                # Default is to try memcache
+                set $destination_block @memcache_check; 
 
-            set_md5 $hash_key $http_host$uri&pv=$page_version;
+                # If we've got proof that it was an SSL cert, just 
+                # short-cut to @gunicorn via the @cache_miss location
+                # (ELB sets X-Forwarded-Proto: HTTPS for instance )
+                if ($http_x_forwarded_proto = HTTPS){
+                    set $destination_block @cache_miss;
+                }
 
-            # make sure this matches the cache prefix and version config in the Django project settings
-            set $django_cache_prefix ps;
-            set $django_cache_version 1;
+                # hand off to whichever block was appropriate  
+                try_files $caught_uri $destination_block;
 
-            set $memcached_key $django_cache_prefix:$django_cache_version:$hash_key;
+                # SJ: not entirely sure about this - needs more 
+                # testing as it shouldn't, to my mind, be needed
 
-            recursive_error_pages on;
+                error_page         401 = $destination_block;
+                error_page         403 = $destination_block;
+                error_page         404 = $destination_block;
+                error_page         405 = $destination_block;
 
-            set $fallthrough_uri null;
-
-            default_type       text/html;
-            memcached_pass     127.0.0.1:11211;
-            
-            # We hand off all of these to @cache_miss and its descendent handlers.
-            # The = means the handlers determine the error code, which is a Good Thing     
-
-            error_page         401 = @cache_miss;
-            error_page         403 = @cache_miss;
-            error_page         404 = @cache_miss;
-            error_page         405 = @cache_miss;
-    
-            # Note that it is not permitted to have a try_files in the same
-            # location block as a memcache_pass
         }
-    }
+}   
 
 Installing Nginx
 ~~~~~~~~~~~~~~~~

@@ -1,6 +1,7 @@
 from django.http import HttpResponse
 from django.test import TestCase
 from django.test.client import RequestFactory
+from django.conf import settings
 
 from nginx_memcache.cache import nginx_cache as cache, get_cache_key
 from nginx_memcache.decorators import cache_page_nginx
@@ -25,3 +26,103 @@ class CachePageDecoratorTests(TestCase):
         self.assertEqual(my_view_cached(request).content, 'content')
 
         assert cache.get(cache_key)
+
+
+class CachePageDecoratorHTTPSTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def test_ssl_requests_can_be_cached(self):
+        def my_view(request):
+            return HttpResponse('content')
+
+        # Show that is_secure() requests are cached by default
+        kwargs = {}
+        kwargs["wsgi.url_scheme"] = "https"
+
+        # Clear the cache before we do anything.
+        request = self.factory.get('/', **kwargs)
+        cache.clear()
+        cache_key = get_cache_key(request.get_host(), request.get_full_path())
+        assert not cache.get(cache_key)
+        # Cache the view
+        my_view_cached = cache_page_nginx(my_view)
+        self.assertEqual(my_view_cached(request).content, 'content')
+        assert cache.get(cache_key)
+
+        # Show that HTTPS header requests are cached by default
+        kwargs = {}
+        kwargs["X-Forwarded-Proto"] = "HTTPS"
+        # Clear the cache before we do anything.
+        request = self.factory.get('/', **kwargs)
+        cache.clear()
+        cache_key = get_cache_key(request.get_host(), request.get_full_path())
+        assert not cache.get(cache_key)
+        # Cache the view
+        my_view_cached = cache_page_nginx(my_view)
+        self.assertEqual(my_view_cached(request).content, 'content')
+        assert cache.get(cache_key)
+
+        kwargs = {}
+        kwargs["X-Forwarded-SSL"] = "on"
+
+        # Clear the cache before we do anything.
+        request = self.factory.get('/', **kwargs)
+        cache.clear()
+        cache_key = get_cache_key(request.get_host(), request.get_full_path())
+        assert not cache.get(cache_key)
+        # Cache the view
+        my_view_cached = cache_page_nginx(my_view)
+        self.assertEqual(my_view_cached(request).content, 'content')
+        assert cache.get(cache_key)
+
+
+class CachePageDecoratorHTTPSSkipCacheTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        ## monkey-patch settings to disable HTTPS cacheing
+        setattr(settings, 'CACHE_NGINX_INCLUDE_HTTPS', False)
+
+    def test_ssl_requests_can_be_not_cached(self):
+        def my_view(request):
+            return HttpResponse('content')
+
+        # Show that is_secure requests can *not* be cached cached by default
+        kwargs = {}
+        kwargs["wsgi.url_scheme"] = "https"
+
+        # Clear the cache before we do anything.
+        request = self.factory.get('/', **kwargs)
+        cache.clear()
+        cache_key = get_cache_key(request.get_host(), request.get_full_path())
+        assert not cache.get(cache_key)
+        # Cache the view
+        my_view_cached = cache_page_nginx(my_view)
+        self.assertEqual(my_view_cached(request).content, 'content')
+        assert not cache.get(cache_key)
+
+        # Show that HTTPS header requests can not be cached cached by default
+        kwargs = {}
+        kwargs["X-Forwarded-Proto"] = "HTTPS"
+        # Clear the cache before we do anything.
+        request = self.factory.get('/', **kwargs)
+        cache.clear()
+        cache_key = get_cache_key(request.get_host(), request.get_full_path())
+        assert not cache.get(cache_key)
+        # Cache the view
+        my_view_cached = cache_page_nginx(my_view)
+        self.assertEqual(my_view_cached(request).content, 'content')
+        assert not cache.get(cache_key)
+
+        kwargs = {}
+        kwargs["X-Forwarded-SSL"] = "on"
+
+        # Clear the cache before we do anything.
+        request = self.factory.get('/', **kwargs)
+        cache.clear()
+        cache_key = get_cache_key(request.get_host(), request.get_full_path())
+        assert not cache.get(cache_key)
+        # Cache the view
+        my_view_cached = cache_page_nginx(my_view)
+        self.assertEqual(my_view_cached(request).content, 'content')
+        assert not cache.get(cache_key)
