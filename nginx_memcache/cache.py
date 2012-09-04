@@ -1,3 +1,5 @@
+import logging
+
 import hashlib
 
 from django.conf import settings
@@ -51,6 +53,8 @@ def cache_response(
         page_version=pv,
         cookie_name=cookie_name
     )
+    logging.info("Cacheing %s %s %s %s with key %s" % (request.get_host(), request.get_full_path(), pv, cookie_name, cache_key))
+
     nginx_cache.set(cache_key, response._get_content(), cache_timeout)
 
     # Store the version, if any specified.
@@ -115,6 +119,8 @@ def invalidate(
         page_version=page_version,
         cookie_name=cookie_name
     )
+    logging.info("Invaldidating key '%s'" % cache_key)
+
     nginx_cache.delete(cache_key)
 
 
@@ -160,9 +166,11 @@ def bulk_invalidate(
             supplementary_identifier=supplementary_identifier
         )
 
-    nginx_cache.delete_many(
-        [record.base_cache_key for record in relevant_records]
-    )
+    keys_to_delete = [record.base_cache_key for record in relevant_records]
+    logging.info("Bulk invalidation of these keys: %s" % str(keys_to_delete))
+
+    nginx_cache.delete_many(keys_to_delete)
+
     # NB: we _don't_ delete the objects for the keys we've just invalidated -
     # there's little overhead in trying to invalidate an already-invalid key
     # in memcache, whereas dropping rows from the DB to replace them
@@ -199,7 +207,7 @@ def remove_key_from_lookup(
         lookup_identifier,
         supplementary_identifier
     ):
-    """Not currently tested, but will cleanly remove a CachedPageRecord"""
+    """Not currently unit tested, but will cleanly remove a CachedPageRecord"""
 
     try:
         cpr = CachedPageRecord.objects.get(
