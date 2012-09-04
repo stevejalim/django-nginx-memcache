@@ -24,12 +24,14 @@ invalidate_many_pages = Signal(
     ]
 )
 
-# Handlers, connected to those signals 
+
+# Handlers, connected to those signals
 
 @receiver(invalidate_single_page)
 def handle_single_page_invalidation(sender, signal, **provided_args):
     invalidate(**provided_args)  # Hand it on with just the core things in there
 
+
 @receiver(invalidate_many_pages)
 def handle_multiple_page_invalidation(sender, signal, **provided_args):
-    bulk_invalidate(**provided_args)  
+    bulk_invalidate(**provided_args)
