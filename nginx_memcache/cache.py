@@ -53,7 +53,9 @@ def cache_response(
         page_version=pv,
         cookie_name=cookie_name
     )
-    logging.info("Cacheing %s %s %s %s with key %s" % (request.get_host(), request.get_full_path(), pv, cookie_name, cache_key))
+    logging.info("Cacheing %s %s %s %s with key %s" % (
+        request.get_host(), request.get_full_path(), pv, cookie_name, cache_key)
+    )
 
     nginx_cache.set(cache_key, response._get_content(), cache_timeout)
 
