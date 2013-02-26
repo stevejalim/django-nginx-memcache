@@ -54,7 +54,7 @@ Installation
     CACHE_NGINX_ALIAS = 'default'
     
     # Whether or not a DB-backed lookup table is useds 
-    CACHE_NGINX_USE_LOOKUP_TABLE = True  # default is True
+    CACHE_NGINX_USE_LOOKUP_TABLE = False  # default is False
 
     # Whether or not to cache HTTPS requests, and how to identify HTTPS requests from headers
     # (eg, if SSL termination has taken place before Django is hit)
