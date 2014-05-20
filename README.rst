@@ -119,10 +119,7 @@ Installation
                 proxy_set_header Host $http_host;
                 proxy_redirect off;
 
-                if (!-f $request_filename) {
-                    proxy_pass http://gunicorn_demosite;
-                    break;
-                }
+	        proxy_pass http://gunicorn_demosite;
 
                 client_max_body_size 10m;
         }
