@@ -54,7 +54,7 @@ Installation
     CACHE_NGINX_ALIAS = 'default'
     
     # Whether or not a DB-backed lookup table is useds 
-    CACHE_NGINX_USE_LOOKUP_TABLE = True  # default is True
+    CACHE_NGINX_USE_LOOKUP_TABLE = False  # default is False
 
     # Whether or not to cache HTTPS requests, and how to identify HTTPS requests from headers
     # (eg, if SSL termination has taken place before Django is hit)
@@ -115,17 +115,11 @@ Installation
         }
 
         location @gunicorn {
-                # This is the standard config for serving Django via gunicorn                                                                                                                            
-                root /usr/local/django/demosite/;
-
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
                 proxy_set_header Host $http_host;
                 proxy_redirect off;
 
-                if (!-f $request_filename) {
-                    proxy_pass http://gunicorn_demosite;
-                    break;
-                }
+	        proxy_pass http://gunicorn_demosite;
 
                 client_max_body_size 10m;
         }

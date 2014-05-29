@@ -57,7 +57,7 @@ def cache_response(
         request.get_host(), request.get_full_path(), pv, cookie_name, cache_key)
     )
 
-    nginx_cache.set(cache_key, response._get_content(), cache_timeout)
+    nginx_cache.set(cache_key, response.content, cache_timeout)
 
     # Store the version, if any specified.
     if pv:
